@@ -1,15 +1,67 @@
-"use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from "@mui/material";
-import FileUploadIcon from '@mui/icons-material/FileUpload';
 import { FileUpload } from "@/components/ui/file-upload";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Download } from "lucide-react";
 
 interface ApiResponse {
   message: string;
-  summary_statistics: Record<string, any>;
+  summary_statistics: Record<string, StatisticsValue>;
   download_link: string;
 }
+
+interface StatisticsValue {
+  count: number;
+  mean: number;
+  std: number;
+  min: number;
+  "25%": number;
+  "50%": number;
+  "75%": number;
+  max: number;
+}
+
+const StatisticsCard = ({ columnName, stats }: { columnName: string; stats: StatisticsValue }) => {
+  const formatValue = (value: number) => {
+    return Number.isInteger(value) ? value.toString() : value.toFixed(4);
+  };
+
+  const statItems = [
+    { label: "Count", value: stats.count },
+    { label: "Mean", value: stats.mean },
+    { label: "Std Dev", value: stats.std },
+    { label: "Min", value: stats.min },
+    { label: "25%", value: stats["25%"] },
+    { label: "Median", value: stats["50%"] },
+    { label: "75%", value: stats["75%"] },
+    { label: "Max", value: stats.max },
+  ];
+
+  return (
+    <Card className="w-full">
+      <CardContent className="pt-6">
+        <h3 className="text-lg font-semibold mb-4">{columnName}</h3>
+        <div className="space-y-2">
+          {statItems.map((item) => (
+            <div key={item.label} className="flex justify-between text-sm">
+              <span className="text-gray-600">{item.label}</span>
+              <span className="font-medium">{formatValue(item.value)}</span>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
 
 export default function Uploader() {
   const [file, setFile] = useState<File | null>(null);
@@ -22,11 +74,9 @@ export default function Uploader() {
       return;
     }
 
-    // Set the first file from the array
     const selectedFile = files[0];
     setFile(selectedFile);
 
-    // Create FormData and append the file
     const formData = new FormData();
     formData.append("file", selectedFile);
 
@@ -48,49 +98,45 @@ export default function Uploader() {
     }
   };
 
-  const handleNextStep = () => {
-    router.push("/readpy");
-  };
-
   return (
     <div className="w-full max-w-4xl mx-auto min-h-96 border border-dashed bg-white dark:bg-black border-neutral-200 dark:border-neutral-800 rounded-lg">
       <FileUpload onChange={handleUpload} />
 
       {response && (
-        <div style={{ marginTop: "2rem" }}>
-          <Typography variant="h5" gutterBottom>
-            Summary Statistics:
-          </Typography>
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Statistic</TableCell>
-                  <TableCell>Value</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {Object.entries(response.summary_statistics).map(([key, value]) => (
-                  <TableRow key={key}>
-                    <TableCell>{key}</TableCell>
-                    <TableCell>{JSON.stringify(value)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button variant="outline" className="mt-4">
+              Open and download Processed Dataset
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Processed Dataset</DialogTitle>
+              <DialogDescription>
+                Review the summary statistics for each column and download the processed dataset.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-4">
+              {Object.entries(response.summary_statistics).map(([columnName, stats]) => (
+                <StatisticsCard key={columnName} columnName={columnName} stats={stats} />
+              ))}
+            </div>
 
-          <Button
-            variant="contained"
-            color="secondary"
-            disabled={!response}
-            sx={{ marginTop: 2 }}
-          >
-            <a href={`http://127.0.0.1:8000${response.download_link}`} download>
-              Download Processed CSV
-            </a>
-          </Button>
-        </div>
+            <div className="flex justify-end mt-4">
+              <a
+                href={http://127.0.0.1:8000${response.download_link}}
+                download
+                className="no-underline"
+              >
+                <Button className="flex items-center gap-2">
+                  <Download className="w-4 h-4" />
+                  Download Processed CSV
+                </Button>
+              </a>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
