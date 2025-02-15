@@ -125,7 +125,7 @@ export default function Uploader() {
 
             <div className="flex justify-end mt-4">
               <a
-                href={http://127.0.0.1:8000${response.download_link}}
+                href={`http://127.0.0.1:8000${response.download_link}`}
                 download
                 className="no-underline"
               >
