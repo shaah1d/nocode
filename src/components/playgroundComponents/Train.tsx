@@ -146,7 +146,6 @@
 //   );
 // }
 
-
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileUpload } from "@/components/ui/file-upload";
@@ -161,21 +160,28 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Download } from "lucide-react";
+import { Loader2 } from "lucide-react"; // For loading spinner
 
 interface ApiResponse {
-  message: string;
-  evaluation_metrics: {
-    mean_squared_error: number;
-    r2_score: number;
-  };
-  model_download_link: string;
+  best_model_name: string;
+  best_model_score: number;
+  evaluation_metrics_all_models: Record<
+    string,
+    {
+      accuracy?: number; // For classification
+      f1_score?: number; // For classification
+      mean_squared_error?: number; // For regression
+      r2_score?: number; // For regression
+    }
+  >;
+  best_model_download_link: string;
 }
 
 export default function ModelTrainer() {
   const [file, setFile] = useState<File | null>(null);
   const [response, setResponse] = useState<ApiResponse | null>(null);
   const [targetColumn, setTargetColumn] = useState<string>("");
-  const [modelType, setModelType] = useState<string>("linear_regression");
+  const [isLoading, setIsLoading] = useState<boolean>(false); // Loading state
   const router = useRouter();
 
   const handleTrainModel = async () => {
@@ -188,10 +194,10 @@ export default function ModelTrainer() {
       return;
     }
 
+    setIsLoading(true); // Start loading
     const formData = new FormData();
     formData.append("file", file);
     formData.append("target_column", targetColumn);
-    formData.append("model_type", modelType);
 
     try {
       const res = await fetch("http://127.0.0.1:8000/train-model/", {
@@ -208,12 +214,14 @@ export default function ModelTrainer() {
     } catch (error) {
       console.error(error);
       alert("An error occurred while training the model.");
+    } finally {
+      setIsLoading(false); // Stop loading
     }
   };
 
   return (
     <div className="w-full max-w-4xl mx-auto min-h-96 border border-dashed bg-white dark:bg-black border-neutral-200 dark:border-neutral-800 rounded-lg p-6">
-      <h1 className="text-2xl font-bold mb-4">Train Machine Learning Model</h1>
+      <h1 className="text-2xl font-bold mb-4">Train Machine Learning Models</h1>
 
       {/* File Upload */}
       <FileUpload onChange={(files: File[]) => setFile(files[0])} />
@@ -235,26 +243,13 @@ export default function ModelTrainer() {
         />
       </div>
 
-      {/* Model Type Selection */}
-      <div className="mt-4">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-          Select Model Type
-        </label>
-        <select
-          value={modelType}
-          onChange={(e) => setModelType(e.target.value)}
-          className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-        >
-          <option value="linear_regression">Linear Regression</option>
-          <option value="decision_tree">Decision Tree</option>
-          <option value="random_forest">Random Forest</option>
-          <option value="svm">Support Vector Machine (SVM)</option>
-        </select>
-      </div>
-
       {/* Train Model Button */}
-      <Button onClick={handleTrainModel} className="mt-4">
-        Train Model
+      <Button onClick={handleTrainModel} disabled={isLoading} className="mt-4">
+        {isLoading ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : (
+          "Train Models"
+        )}
       </Button>
 
       {/* Response Dialog */}
@@ -262,48 +257,106 @@ export default function ModelTrainer() {
         <Dialog>
           <DialogTrigger asChild>
             <Button variant="outline" className="mt-4">
-              View Results and Download Model
+              View Results and Download Best Model
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Model Training Results</DialogTitle>
               <DialogDescription>
-                Review the evaluation metrics and download the trained model.
+                Review the evaluation metrics for all models and download the
+                best-performing model.
               </DialogDescription>
             </DialogHeader>
 
-            {/* Evaluation Metrics */}
+            {/* Best Model Information */}
             <Card className="mt-4">
               <CardContent className="pt-6">
-                <h3 className="text-lg font-semibold mb-4">Evaluation Metrics</h3>
+                <h3 className="text-lg font-semibold mb-4">Best Model</h3>
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Mean Squared Error</span>
-                    <span className="font-medium">
-                      {response.evaluation_metrics.mean_squared_error.toFixed(4)}
-                    </span>
+                    <span className="text-gray-600">Model Name</span>
+                    <span className="font-medium">{response.best_model_name}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">R² Score</span>
+                    <span className="text-gray-600">
+                      {response.evaluation_metrics_all_models[
+                        response.best_model_name
+                      ].accuracy !== undefined
+                        ? "Accuracy"
+                        : "Mean Squared Error"}
+                    </span>
                     <span className="font-medium">
-                      {response.evaluation_metrics.r2_score.toFixed(4)}
+                      {response.best_model_score.toFixed(4)}
                     </span>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Download Model Button */}
+            {/* Evaluation Metrics for All Models */}
+            <Card className="mt-4">
+              <CardContent className="pt-6">
+                <h3 className="text-lg font-semibold mb-4">
+                  Evaluation Metrics for All Models
+                </h3>
+                <div className="space-y-4">
+                  {Object.entries(response.evaluation_metrics_all_models).map(
+                    ([modelName, metrics]) => (
+                      <div key={modelName} className="border rounded-lg p-4">
+                        <h4 className="text-md font-medium mb-2">{modelName}</h4>
+                        <div className="space-y-2">
+                          {metrics.accuracy !== undefined ? (
+                            <>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Accuracy</span>
+                                <span className="font-medium">
+                                  {metrics.accuracy?.toFixed(4) || "N/A"}
+                                </span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">F1 Score</span>
+                                <span className="font-medium">
+                                  {metrics.f1_score?.toFixed(4) || "N/A"}
+                                </span>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">
+                                  Mean Squared Error
+                                </span>
+                                <span className="font-medium">
+                                  {metrics.mean_squared_error?.toFixed(4) || "N/A"}
+                                </span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">R² Score</span>
+                                <span className="font-medium">
+                                  {metrics.r2_score?.toFixed(4) || "N/A"}
+                                </span>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Download Best Model Button */}
             <div className="flex justify-end mt-4">
               <a
-                href={`http://127.0.0.1:8000${response.model_download_link}`}
+                href={`http://127.0.0.1:8000${response.best_model_download_link}`}
                 download
                 className="no-underline"
               >
                 <Button className="flex items-center gap-2">
                   <Download className="w-4 h-4" />
-                  Download Trained Model
+                  Download Best Model
                 </Button>
               </a>
             </div>
