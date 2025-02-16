@@ -6,20 +6,13 @@ from fastapi.responses import FileResponse, JSONResponse
 import pandas as pd
 import os
 from typing import Dict, Any
-# from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from scipy.stats import shapiro
-# from sklearn.model_selection import train_test_split
-# from sklearn.metrics import mean_squared_error, r2_score, accuracy_score
-# from sklearn.linear_model import LinearRegression
-# from sklearn.tree import DecisionTreeRegressor
-# from sklearn.ensemble import RandomForestRegressor
-# from sklearn.svm import SVR
 import joblib
 import uvicorn
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler, OneHotEncoder, MinMaxScaler
+from sklearn.preprocessing import StandardScaler, OneHotEncoder, MinMaxScaler, OrdinalEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, f1_score, mean_squared_error, r2_score
 from sklearn.linear_model import LogisticRegression, LinearRegression
@@ -27,7 +20,7 @@ from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.svm import SVC, SVR
 import logging
-from joblib import Parallel, delayed
+# from joblib import Parallel, delayed
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -53,36 +46,25 @@ os.makedirs(TEMP_DIR, exist_ok=True)
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 def determine_scaler(df: pd.DataFrame) -> str:
-    """
-    Automatically determine the most suitable scaler based on the dataset's characteristics.
-    """
+    """Determine the most suitable scaler based on numeric column distributions."""
     numeric_cols = df.select_dtypes(include=["float64", "int64"]).columns
-    normality_scores = []
-    for col in numeric_cols:
-        # Perform Shapiro-Wilk test for normality
-        stat, p_value = shapiro(df[col].dropna())
-        normality_scores.append(p_value > 0.05)  # True if normal, False otherwise
-    # Count how many columns are normally distributed
-    normal_count = sum(normality_scores)
-    total_numeric_cols = len(numeric_cols)
-    # If more than 50% of numeric columns are normally distributed, use StandardScaler
-    if normal_count / total_numeric_cols > 0.5:
-        return "standard"
-    else:
-        return "minmax"
+    if numeric_cols.empty:
+        return "minmax"  # Default if no numeric columns
+    
+    skewness = df[numeric_cols].skew().abs().mean()
+    return "standard" if skewness < 1 else "minmax"
 
-
-def convert_numpy_types(data):
-    if isinstance(data, dict):
-        return {k: convert_numpy_types(v) for k, v in data.items()}
-    elif isinstance(data, list):
-        return [convert_numpy_types(item) for item in data]
-    elif isinstance(data, (np.int64, np.int32)):
-        return int(data)
-    elif isinstance(data, (np.float64, np.float32)):
-        return float(data)
-    else:
-        return data
+def convert_numpy_types(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert NumPy types to native Python types for JSON serialization."""
+    converted_data = {}
+    for key, value in data.items():
+        if isinstance(value, dict):
+            converted_data[key] = convert_numpy_types(value)
+        elif isinstance(value, (np.integer, np.floating)):
+            converted_data[key] = value.item()
+        else:
+            converted_data[key] = value
+    return converted_data
 
 @app.post("/process-csv/")
 async def process_csv(file: UploadFile = File(...)) -> Dict[str, Any]:
@@ -104,6 +86,15 @@ async def process_csv(file: UploadFile = File(...)) -> Dict[str, Any]:
         fill_values.update({col: "Unknown" for col in categorical_cols})
         df.fillna(value=fill_values, inplace=True)
         
+        # Text Normalization for Categorical Columns
+        for col in categorical_cols:
+            df[col] = df[col].str.lower()  # Convert to lowercase
+            df[col] = df[col].str.replace(r"[^\w\s]", "", regex=True)  # Remove special characters
+        
+        # Apply Ordinal Encoding for Categorical Columns
+        ordinal_encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
+        df[categorical_cols] = ordinal_encoder.fit_transform(df[categorical_cols])
+        
         # Generate summary statistics for all columns
         summary_stats = {}
         for col in df.columns:
@@ -113,7 +104,7 @@ async def process_csv(file: UploadFile = File(...)) -> Dict[str, Any]:
                 stats["missing_values"] = int(df[col].isnull().sum())  # Count missing values
                 summary_stats[col] = stats
             elif col in categorical_cols:
-                # Categorical column: count unique values and most frequent category
+                # Encoded column: count unique values and most frequent category
                 value_counts = df[col].value_counts().to_dict()
                 summary_stats[col] = {
                     "unique_values": len(value_counts),
