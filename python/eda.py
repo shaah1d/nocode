@@ -188,16 +188,16 @@ async def train_model(
         y = df[target_column]
 
         # Determine if the task is classification or regression
-        is_classification = y.dtype == "object" or y.nunique() <= 20  # Treat numeric columns with <= 20 unique values as classification
+        is_classification = y.dtype == "object" or y.nunique() <= 20
 
-        # Identify text and numeric columns
-        text_columns = X.select_dtypes(include=["object", "string"]).columns
-        numeric_columns = X.select_dtypes(include=["float64", "int64"]).columns
+        # Identify numeric and categorical columns
+        numeric_columns = X.select_dtypes(include=["float64", "int64"]).columns.tolist()
+        categorical_columns = X.select_dtypes(include=["object", "string"]).columns.tolist()
 
-        # Preprocessing pipeline
+        # Define the preprocessing steps
         preprocessor = ColumnTransformer(
             transformers=[
-                ("text", TfidfVectorizer(), text_columns[0]) if len(text_columns) > 0 else ("text", "passthrough", []),
+                ("cat", OneHotEncoder(handle_unknown="ignore"), categorical_columns),
                 ("num", StandardScaler(), numeric_columns),
             ]
         )
@@ -249,7 +249,7 @@ async def train_model(
                 f1 = f1_score(y_test, y_pred, average="weighted")
                 score = accuracy  # Use accuracy as the primary metric
                 model_scores[model_name] = {
-                    "accuracy": round(accuracy, 4),
+                    "accuracy": round(accuracy, 4), 
                     "f1_score": round(f1, 4),
                 }
             else:
@@ -291,5 +291,58 @@ async def download_model(model_name: str):
         headers={"Content-Disposition": f"attachment; filename={model_name}"}
     )
 
+@app.post("/test-model/")
+async def test_model(
+    model_file: UploadFile = File(...),
+    test_data_file: UploadFile = File(...),
+    target_column: str = Form(...),
+):
+    try:
+        # Load the trained model
+        model_path = os.path.join(TEMP_DIR, "uploaded_model.joblib")
+        with open(model_path, "wb") as f:
+            f.write(await model_file.read())
+        model = joblib.load(model_path)
+
+        # Load the test data
+        test_df = pd.read_csv(test_data_file.file)
+
+        # Ensure the target column exists
+        if target_column not in test_df.columns:
+            return JSONResponse(status_code=400, content={"error": f"Target column '{target_column}' not found in test dataset."})
+
+        # Separate features and target
+        X_test = test_df.drop(columns=[target_column])
+        y_test = test_df[target_column]
+
+        # Make predictions using the full pipeline
+        # This automatically handles preprocessing since it's part of the pipeline
+        y_pred = model.predict(X_test)
+
+        # Evaluate the model
+        is_classification = isinstance(y_test.iloc[0], (str, bool)) or y_test.nunique() <= 20
+        if is_classification:
+            accuracy = accuracy_score(y_test, y_pred)
+            f1 = f1_score(y_test, y_pred, average="weighted")
+            result = {
+                "accuracy": round(accuracy, 4),
+                "f1_score": round(f1, 4),
+                "predictions": y_pred.tolist(),
+            }
+        else:
+            mse = mean_squared_error(y_test, y_pred)
+            r2 = r2_score(y_test, y_pred)
+            result = {
+                "mean_squared_error": round(mse, 4),
+                "r2_score": round(r2, 4),
+                "predictions": y_pred.tolist(),
+            }
+
+        return result
+
+    except Exception as e:
+        logging.error(f"Error testing the model: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+    
 if __name__ == "__main__":
     uvicorn.run(app, port=8000)
