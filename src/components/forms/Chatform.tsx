@@ -64,25 +64,7 @@ const LandingPage = () => {
 
   return (
     <div className="min-h-screen bg-[#f8f8f8]">
-      <header className="flex items-center justify-between p-6">
-        <div className="flex space-x-2">
-          <div className="h-2 w-2 rounded-full bg-black"></div>
-          <div className="h-2 w-2 rounded-full bg-black"></div>
-        </div>
-        <div className="flex items-center space-x-6">
-          <button className="text-sm">EN</button>
-          <button
-           
-            className="text-sm hover:underline"
-          >
-            CONTACT US
-          </button>
-          <button className="flex flex-col space-y-1">
-            <span className="h-0.5 w-6 bg-black"></span>
-            <span className="h-0.5 w-6 bg-black"></span>
-          </button>
-        </div>
-      </header>
+   
       <main className="relative px-6 pt-12">
         <div
           className="absolute right-0 top-0 h-[300px] w-[300px] animate-pulse rounded-full bg-gradient-to-br from-pink-400 via-orange-300 to-yellow-200 opacity-70 blur-3xl"
@@ -130,6 +112,7 @@ const LandingPage = () => {
                                 {...field}
                                 disabled={isLoading || isLoad}
                                 className="border-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                                autoComplete="off"
                               />
                             </FormControl>
                             <FormMessage />

@@ -1,23 +1,27 @@
-// components/footer.tsx
-export default function Footer() {
+import React from 'react'
+
+function Footer() {
   return (
-    <footer className="bg-gray-800 text-white py-8">
-      <div className="container mx-auto px-4 text-center">
-        <p className="mb-4">
-          &copy; {new Date().getFullYear()} Your Platform Name. All rights reserved.
-        </p>
-        <div className="flex justify-center space-x-4">
-          <a href="#" className="hover:text-gray-400">
-            Privacy Policy
-          </a>
-          <a href="#" className="hover:text-gray-400">
-            Terms of Service
-          </a>
-          <a href="#" className="hover:text-gray-400">
-            Contact Us
-          </a>
-        </div>
-      </div>
-    </footer>
-  );
+    <footer className="footer footer-center bg-[#f8f8f8] text-primary-content p-10">
+  <aside>
+    <div className='flex gap-2'>
+  <div className="h-2 w-2 rounded-full bg-black"></div>
+  <div className="h-2 w-2 rounded-full bg-black"></div>
+  </div>
+    <p className="font-bold">
+      NoCode AIModel Builder
+      
+  
+    </p>
+    <p>Copyright © {new Date().getFullYear()} - All right reserved</p>
+  </aside>
+  <nav>
+    <div className="grid grid-flow-col gap-4">
+     
+    </div>
+  </nav>
+</footer>
+  )
 }
+
+export default Footer
