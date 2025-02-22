@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     const { question } = await req.json();
 
     // Construct the prompt
-    const prompt = `Here is my problem statement to make an AI/ML model, I need a paragraph with info on the most efficient algorithm and give me the expected range of metrics. Also, put a disclaimer saying that the range of metrics is expected and can vary.
+    const prompt = `Here is my problem statement.. make a ML model, I need a paragraph (Strict ML only no DL no AI) with info on the most efficient algorithm and give me the expected range of metrics. Also, put a disclaimer saying that the range of metrics is expected and can vary.
     Make it short to only 4 -5 lines
     Here is the question: ${question}
     dont make a json out of it just do the message in plain message`;
