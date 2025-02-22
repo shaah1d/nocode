@@ -8,6 +8,7 @@ import {
   Connection,
   Background,
   Controls,
+  MiniMap,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import Uploader from "./Uploader";
@@ -17,8 +18,6 @@ import Hyper from "./Hyper";
 import Testing from "./Testing";
 import DataVisualization from "./DataVisualization";
 
-
-
 export default function FlowchartComponent() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -27,8 +26,24 @@ export default function FlowchartComponent() {
   const [openData3, setOpenData3] = useState(false);
   const [openData4, setOpenData4] = useState(false);
   const [openData5, setOpenData5] = useState(false);
+  const [availableNodes, setAvailableNodes] = useState([
+    { type: "Import Dataset & Data Cleaning", color: "bg-purple-200", hoverColor: "bg-purple-300" },
+    { type: "Train Model", color: "bg-blue-200", hoverColor: "bg-blue-300" },
+    { type: "Hyper-Parameter Tuning", color: "bg-green-200", hoverColor: "bg-green-300" },
+    { type: "Extensive Model Testing", color: "bg-orange-200", hoverColor: "bg-orange-300" },
+    { type: "Data Visualization", color: "bg-red-200", hoverColor: "bg-red-300" },
+  ]);
 
-  // Callback for connecting edges
+  // Map node types to their background colors
+  const nodeColorMap = {
+    "Import Dataset & Data Cleaning": "#e9d5ff", // purple-200
+    "Train Model": "#bfdbfe", // blue-200
+    "Hyper-Parameter Tuning": "#bbf7d0", // green-200
+    "Extensive Model Testing": "#fed7aa", // orange-200
+    "Data Visualization": "#fecaca", // red-200
+  };
+
+  // Callback for connecting edges - KEEP THIS BEHAVIOR
   const onConnect = useCallback(
     (params: Connection) => {
       setEdges((eds) => addEdge(params, eds));
@@ -45,44 +60,43 @@ export default function FlowchartComponent() {
   const onDragStart = (event: React.DragEvent<HTMLDivElement>, nodeType: string) => {
     event.dataTransfer.setData("application/reactflow", nodeType);
     event.dataTransfer.effectAllowed = "move";
-
-   
   };
 
   // Handle drop on the ReactFlow canvas
-  // Handle drop on the ReactFlow canvas
-const onDrop = useCallback(
-  (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
+  const onDrop = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      event.preventDefault();
 
-    // Get the node type from the drag data
-    const type = event.dataTransfer.getData("application/reactflow");
-    if (!type) return;
+      // Get the node type from the drag data
+      const type = event.dataTransfer.getData("application/reactflow");
+      if (!type) return;
 
-    // Get the mouse position relative to the ReactFlow canvas
-    const reactFlowBounds = event.currentTarget.getBoundingClientRect();
-    const position = {
-      x: event.clientX - reactFlowBounds.left,
-      y: event.clientY - reactFlowBounds.top,
-    };
+      // Get the mouse position relative to the ReactFlow canvas
+      const reactFlowBounds = event.currentTarget.getBoundingClientRect();
+      const position = {
+        x: event.clientX - reactFlowBounds.left,
+        y: event.clientY - reactFlowBounds.top,
+      };
 
-    // Add a new node to the state
-    const newNode = {
-      id: `${nodes.length + 1}`,
-      type,
-      position,
-      data: { label: `${type} ` },
-      style: { backgroundColor: getRandomColor() },
-    };
-    setNodes((nds) => nds.concat(newNode));
+      // Add a new node to the state with hardcoded color
+      const newNode = {
+        id: `${nodes.length + 1}`,
+        type,
+        position,
+        data: { label: `${type} ` },
+        style: { backgroundColor: nodeColorMap[type] },
+      };
+      setNodes((nds) => nds.concat(newNode));
 
-    // Check if the dropped node is "Card 1" and set openData1 to true
-    if (type === "Import Dataset & Data Cleaning") {
-      setOpenData1(true);
-    }
-  },
-  [nodes, setNodes]
-);
+      // Remove the node from available nodes
+      setAvailableNodes(availableNodes.filter(node => node.type !== type));
+
+      if (type === "Import Dataset & Data Cleaning") {
+        setOpenData1(true);
+      }
+    },
+    [nodes, setNodes, availableNodes, nodeColorMap]
+  );
 
   // Allow dropping on the ReactFlow canvas
   const onDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
@@ -91,93 +105,68 @@ const onDrop = useCallback(
   }, []);
 
   return (
-<div style={{ display: "flex", width: "100vw", height: "100vh", overflow: "hidden" }}>
-  {/* Left Section: Node Templates */}
-  <div className="w-64 bg-gray-100 p-4 shadow-lg overflow-y-auto">
-    <h2 className="text-xl font-bold mb-4 text-gray-800">Node Templates</h2>
-    <div
-      className="p-4 mb-4 bg-purple-200 rounded-lg shadow-md cursor-move transition duration-300 ease-in-out hover:bg-purple-300 hover:shadow-lg"
-      onDragStart={(event) => onDragStart(event, "Import Dataset & Data Cleaning")}
-      draggable
-    >
-      Import Dataset & Data Cleaning
-    </div>
-    <div
-      className="p-4 mb-4 bg-blue-200 rounded-lg shadow-md cursor-move transition duration-300 ease-in-out hover:bg-blue-300 hover:shadow-lg"
-      onDragStart={(event) => onDragStart(event, "Train Model")}
-      draggable
-    >
-      Train Model
-    </div>
-    <div
-      className="p-4 mb-4 bg-green-200 rounded-lg shadow-md cursor-move transition duration-300 ease-in-out hover:bg-green-300 hover:shadow-lg"
-      onDragStart={(event) => onDragStart(event, "Hyper-Parameter Tuning")}
-      draggable
-    >
-      Hyper-Parameter Tuning
-    </div>
-    <div
-      className="p-4 mb-4 bg-orange-200 rounded-lg shadow-md cursor-move transition duration-300 ease-in-out hover:bg-orange-300 hover:shadow-lg"
-      onDragStart={(event) => onDragStart(event, "Extensive Model Testing")}
-      draggable
-    >
-      Extensive Model Testing
-    </div>
-    <div
-      className="p-4 mb-4 bg-red-200 rounded-lg shadow-md cursor-move transition duration-300 ease-in-out hover:bg-red-300 hover:shadow-lg"
-      onDragStart={(event) => onDragStart(event, "Data Visualization")}
-      draggable
-    >
-      Data Visualization
-    </div>
-  </div>
-
-  {/* Center Section: ReactFlow Canvas */}
-  <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
-    <ReactFlow
-      nodes={nodes}
-      edges={edges}
-      onNodesChange={onNodesChange}
-      onEdgesChange={onEdgesChange}
-      onConnect={onConnect}
-      onDrop={onDrop}
-      onDragOver={onDragOver}
-      style={{ width: "100%", height: "100%" }}
-    >
-      <Background />
-      <Controls />
-    </ReactFlow>
-  </div>
-
-  {/* Right Section: Details */}
-  <div className="w-96 bg-white p-6 shadow-lg overflow-y-auto">
-    <h2 className="text-2xl font-bold mb-6 text-gray-800">Details</h2>
-    <ScrollArea className="h-[calc(100vh-150px)]">
-      {openData5 && <DataVisualization />}
-      {!openData5 && openData4 && <Testing />}
-      {!openData5 && !openData4 && openData3 && <Hyper />}
-      {!openData5 && !openData4 && !openData3 && openData2 && <Train />}
-      {!openData5 && !openData4 && !openData3 && !openData2 && openData1 && (
-        <Uploader />
-      )}
-      {!openData1 &&
-        !openData2 &&
-        !openData3 &&
-        !openData4 &&
-        !openData5 && (
-          <div className="text-gray-500 text-center">
-            <p>No component selected</p>
-            <p>Drag and drop a component to view details</p>
+    <div style={{ display: "flex", width: "98.5vw", height: "100vh", overflow: "hidden" }}>
+      {/* Left Section: Node Templates */}
+      <div className="w-64 bg-gray-100 p-4 shadow-lg overflow-y-auto">
+        <h2 className="text-xl font-bold mb-4 text-gray-800">Node Templates</h2>
+        {availableNodes.map((node, index) => (
+          <div
+            key={index}
+            className={`p-4 mb-4 ${node.color} rounded-lg shadow-md cursor-move transition duration-300 ease-in-out hover:${node.hoverColor} hover:shadow-lg`}
+            onDragStart={(event) => onDragStart(event, node.type)}
+            draggable
+          >
+            {node.type}
+          </div>
+        ))}
+        {availableNodes.length === 0 && (
+          <div className="text-gray-500 text-center p-4">
+            <p>All components have been used</p>
           </div>
         )}
-    </ScrollArea>
-  </div>
-</div>
-  );
-}
+      </div>
 
-// Helper function to generate random colors for nodes
-function getRandomColor() {
-  const colors = ["pink", "lightblue", "lightgreen", "orange", "red"];
-  return colors[Math.floor(Math.random() * colors.length)];
+      {/* Center Section: ReactFlow Canvas */}
+      <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onDrop={onDrop}
+          onDragOver={onDragOver}
+          style={{ width: "100%", height: "100%" }}
+        >
+          <Background />
+          <Controls />
+          {/* <MiniMap /> */}
+        </ReactFlow>
+      </div>
+
+      {/* Right Section: Details */}
+      <div className="w-96 bg-white p-6 shadow-lg overflow-y-auto">
+        <h2 className="text-2xl font-bold mb-6 text-gray-800">Details</h2>
+        <ScrollArea className="h-[calc(100vh-150px)]">
+          {openData5 && <DataVisualization />}
+          {!openData5 && openData4 && <Testing />}
+          {!openData5 && !openData4 && openData3 && <Hyper />}
+          {!openData5 && !openData4 && !openData3 && openData2 && <Train />}
+          {!openData5 && !openData4 && !openData3 && !openData2 && openData1 && (
+            <Uploader />
+          )}
+          {!openData1 &&
+            !openData2 &&
+            !openData3 &&
+            !openData4 &&
+            !openData5 && (
+              <div className="text-gray-500 text-center">
+                <p>No component selected</p>
+                <p>Drag and drop a component to view details</p>
+              </div>
+            )}
+        </ScrollArea>
+      </div>
+    </div>
+  );
 }

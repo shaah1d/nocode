@@ -6,6 +6,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Send } from "lucide-react";
 import { TypingAnimation } from "../magicui/typing-animation";
+import Navbar from "../Layout/Navbar";
 import {
   Form,
   FormControl,
@@ -14,7 +15,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import Navbar from "../Layout/Navbar";
+// import Navbar from "../Layout/Navbar";
 
 
 const formSchema = z.object({
@@ -30,6 +31,7 @@ const LandingPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoad, setIsLoad] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  setIsLoad(false)
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -65,14 +67,16 @@ const LandingPage = () => {
 
   return (
     <div className="min-h-screen bg-[#f8f8f8]">
-   <Navbar />
+      <Navbar />
       <main className="relative px-6 pt-12">
         <div
           className="absolute right-0 top-0 h-[300px] w-[300px] animate-pulse rounded-full bg-gradient-to-br from-pink-400 via-orange-300 to-yellow-200 opacity-70 blur-3xl"
           aria-hidden="true"
         />
+     
         <div className="relative flex flex-col md:flex-row justify-between items-center">
           {/* Left Section */}
+          
 
           <div className="w-full md:w-1/2 max-w-md">
             <h1 className="max-w-3xl text-5xl font-light leading-tight tracking-tight mb-4">
