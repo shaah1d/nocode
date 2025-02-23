@@ -34,6 +34,7 @@ export default function FlowchartComponent() {
     { type: "Data Visualization", color: "bg-red-200", hoverColor: "bg-red-300" },
   ]);
 
+  
  // This is to match the colors from the cards to the nodes 
   const nodeColorMap = {
     "Import Dataset & Data Cleaning": "#e9d5ff", // purple-200
