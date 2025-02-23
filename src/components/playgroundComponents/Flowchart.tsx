@@ -34,7 +34,7 @@ export default function FlowchartComponent() {
     { type: "Data Visualization", color: "bg-red-200", hoverColor: "bg-red-300" },
   ]);
 
-  // Map node types to their background colors
+ // This is to match the colors from the cards to the nodes 
   const nodeColorMap = {
     "Import Dataset & Data Cleaning": "#e9d5ff", // purple-200
     "Train Model": "#bfdbfe", // blue-200
@@ -43,7 +43,7 @@ export default function FlowchartComponent() {
     "Data Visualization": "#fecaca", // red-200
   };
 
-  // Callback for connecting edges - KEEP THIS BEHAVIOR
+  // This function is to render steps based on connections of edges using states
   const onConnect = useCallback(
     (params: Connection) => {
       setEdges((eds) => addEdge(params, eds));
@@ -56,29 +56,28 @@ export default function FlowchartComponent() {
     [setEdges]
   );
 
-  // Handle drag start for nodes in the left sidebar
+  
   const onDragStart = (event: React.DragEvent<HTMLDivElement>, nodeType: string) => {
     event.dataTransfer.setData("application/reactflow", nodeType);
     event.dataTransfer.effectAllowed = "move";
   };
 
-  // Handle drop on the ReactFlow canvas
   const onDrop = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
       event.preventDefault();
 
-      // Get the node type from the drag data
+     
       const type = event.dataTransfer.getData("application/reactflow");
       if (!type) return;
 
-      // Get the mouse position relative to the ReactFlow canvas
+     
       const reactFlowBounds = event.currentTarget.getBoundingClientRect();
       const position = {
         x: event.clientX - reactFlowBounds.left,
         y: event.clientY - reactFlowBounds.top,
       };
 
-      // Add a new node to the state with hardcoded color
+      // Here once card is dropped a new node is created with the color given above
       const newNode = {
         id: `${nodes.length + 1}`,
         type,
@@ -106,7 +105,7 @@ export default function FlowchartComponent() {
 
   return (
     <div style={{ display: "flex", width: "98.5vw", height: "100vh", overflow: "hidden" }}>
-      {/* Left Section: Node Templates */}
+      {/* Sidebar with cards */}
       <div className="w-64 bg-gray-100 p-4 shadow-lg overflow-y-auto">
         <h2 className="text-xl font-bold mb-4 text-gray-800">Node Templates</h2>
         {availableNodes.map((node, index) => (
@@ -126,7 +125,7 @@ export default function FlowchartComponent() {
         )}
       </div>
 
-      {/* Center Section: ReactFlow Canvas */}
+      {/*  ReactFlow Canvas */}
       <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
         <ReactFlow
           nodes={nodes}
@@ -144,7 +143,7 @@ export default function FlowchartComponent() {
         </ReactFlow>
       </div>
 
-      {/* Right Section: Details */}
+      {/* conditional rendered pages */}
       <div className="w-96 bg-white p-6 shadow-lg overflow-y-auto">
         <h2 className="text-2xl font-bold mb-6 text-gray-800">Details</h2>
         <ScrollArea className="h-[calc(100vh-150px)]">
