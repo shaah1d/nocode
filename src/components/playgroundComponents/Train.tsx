@@ -1,154 +1,9 @@
-// 'use client';
-// import {
-//   Dialog,
-//   DialogContent,
-//   DialogDescription,
-//   DialogHeader,
-//   DialogTitle,
-// } from "@/components/ui/dialog";
-// import { ScrollArea } from "@/components/ui/scroll-area";
-// import { Button } from "@/components/ui/button";
-// import { useEffect, useState } from 'react';
-// import { Select, MenuItem, FormControl, InputLabel, Box, Typography } from '@mui/material';
-// import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-// import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
-// import { Copy, Check } from 'lucide-react';
-
-// export default function Train() {
-//   const [pythonFileContent, setPythonFileContent] = useState<string | null>(null);
-//   const [loading, setLoading] = useState(false);
-//   const [error, setError] = useState<string | null>(null);
-//   const [modelName, setModelName] = useState<string>('');
-//   const [isDialogOpen, setIsDialogOpen] = useState(false);
-//   const [isCopied, setIsCopied] = useState(false);
-
-//   const modelOptions = [
-//     'XgBoost',
-//     'KNN',
-//     'RandomForestRegressor',
-//     'DecisionTreesRegressor',
-//     'LinearRegression',
-//   ];
-
-//   useEffect(() => {
-//     const fetchData = async () => {
-//       if (!modelName) {
-//         return;
-//       }
-
-//       setLoading(true);
-//       try {
-//         const response = await fetch(`/api/python/${modelName}`);
-//         if (!response.ok) {
-//           throw new Error('Failed to fetch Python file content');
-//         }
-//         const data = await response.json();
-//         setPythonFileContent(data.content);
-//         setIsDialogOpen(true);
-//       } catch (err: any) {
-//         setError(err.message);
-//       } finally {
-//         setLoading(false);
-//       }
-//     };
-
-//     fetchData();
-//   }, [modelName]);
-
-//   const handleModelChange = (event: any) => {
-//     setError(null);
-//     setModelName(event.target.value);
-//   };
-
-//   const handleCopyCode = async () => {
-//     if (pythonFileContent) {
-//       try {
-//         await navigator.clipboard.writeText(pythonFileContent);
-//         setIsCopied(true);
-//         setTimeout(() => setIsCopied(false), 2000); // Reset after 2 seconds
-//       } catch (err) {
-//         console.error('Failed to copy code:', err);
-//       }
-//     }
-//   };
-
-//   return (
-//     <Box sx={{ maxWidth: 600, margin: 'auto', padding: 4 }}>
-//       <Typography variant="h4" gutterBottom>
-//         Select a Model to View Its Python Code
-//       </Typography>
-
-//       <FormControl fullWidth sx={{ marginBottom: 2 }}>
-//         <InputLabel id="model-select-label">Select Model</InputLabel>
-//         <Select
-//           labelId="model-select-label"
-//           value={modelName}
-//           onChange={handleModelChange}
-//           label="Select Model"
-//         >
-//           {modelOptions.map((option) => (
-//             <MenuItem key={option} value={option}>
-//               {option}
-//             </MenuItem>
-//           ))}
-//         </Select>
-//       </FormControl>
-
-//       {loading && <Typography>Loading...</Typography>}
-//       {error && <Typography color="error">{error}</Typography>}
-
-//       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-//         <DialogContent className="max-w-3xl h-[80vh] max-h-[800px]">
-//           <DialogHeader className="flex flex-col space-y-4">
-//             <div className="flex justify-between items-center">
-//               <DialogTitle className="text-xl font-bold">
-//                 {modelName} Implementation
-//               </DialogTitle>
-//               <Button
-//                 variant="outline"
-//                 size="sm"
-//                 onClick={handleCopyCode}
-//                 className="h-8 px-2"
-//               >
-//                 {isCopied ? (
-//                   <>
-//                     <Check className="h-4 w-4 mr-2" />
-                
-//                   </>
-//                 ) : (
-//                   <>
-//                     <Copy className="h-4 w-4 mr-2" />
-                
-//                   </>
-//                 )}
-//               </Button>
-//             </div>
-//             <ScrollArea className="h-full max-h-[calc(80vh-100px)]">
-//               <DialogDescription asChild>
-//                 <div className="relative">
-//                   <SyntaxHighlighter
-//                     language="python"
-//                     style={tomorrow}
-//                     customStyle={{
-//                       margin: 0,
-//                       borderRadius: '6px',
-//                     }}
-//                   >
-//                     {pythonFileContent || ''}
-//                   </SyntaxHighlighter>
-//                 </div>
-//               </DialogDescription>
-//             </ScrollArea>
-//           </DialogHeader>
-//         </DialogContent>
-//       </Dialog>
-//     </Box>
-//   );
-// }
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileUpload } from "@/components/ui/file-upload";
+import { Input } from "../ui/input";
+import { ChevronRight } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -220,149 +75,100 @@ export default function ModelTrainer() {
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto min-h-96 border border-dashed bg-white dark:bg-black border-neutral-200 dark:border-neutral-800 rounded-lg p-6">
-      <h1 className="text-2xl font-bold mb-4">Train Machine Learning Models</h1>
+    <div className="h-screen w-full flex items-center justify-center bg-white p-4">
+    <div className="w-full max-w-2xl space-y-4">
+      <p className="text-sm text-gray-600">Upload your dataset and configure your model training parameters.</p>
 
-      {/* File Upload */}
-      <FileUpload onChange={(files: File[]) => setFile(files[0])} />
-      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-        Upload your processed dataset (CSV file).
-      </p>
+      <div className="space-y-4">
+        <div>
+          <FileUpload onChange={(files: File[]) => setFile(files[0])} />
+          <p className="text-xs text-gray-500 mt-1">Upload your processed dataset (CSV file).</p>
+        </div>
 
-      {/* Target Column Input */}
-      <div className="mt-4">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-          Target Column
-        </label>
-        <input
-          type="text"
-          placeholder="Enter target column name"
-          value={targetColumn}
-          onChange={(e) => setTargetColumn(e.target.value)}
-          className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-        />
+        <div>
+          <label htmlFor="target-column" className="text-sm font-medium text-gray-700 block mb-1">
+            Target Column
+          </label>
+          <Input
+            id="target-column"
+            placeholder="Enter target column name"
+            value={targetColumn}
+            onChange={(e) => setTargetColumn(e.target.value)}
+          />
+        </div>
+
+        <Button onClick={handleTrainModel} disabled={isLoading} className="w-full">
+          {isLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Training Models...
+            </>
+          ) : (
+            <>
+              Train Models
+              <ChevronRight className="ml-2 h-4 w-4" />
+            </>
+          )}
+        </Button>
       </div>
 
-      {/* Train Model Button */}
-      <Button onClick={handleTrainModel} disabled={isLoading} className="mt-4">
-        {isLoading ? (
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        ) : (
-          "Train Models"
-        )}
-      </Button>
-
-      {/* Response Dialog */}
       {response && (
         <Dialog>
           <DialogTrigger asChild>
-            <Button variant="outline" className="mt-4">
+            <Button variant="outline" className="w-full mt-2">
               View Results and Download Best Model
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Model Training Results</DialogTitle>
-              <DialogDescription>
-                Review the evaluation metrics for all models and download the
-                best-performing model.
-              </DialogDescription>
+              <DialogDescription>Review the evaluation metrics and download the best model.</DialogDescription>
             </DialogHeader>
 
-            {/* Best Model Information */}
-            <Card className="mt-4">
-              <CardContent className="pt-6">
-                <h3 className="text-lg font-semibold mb-4">Best Model</h3>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Model Name</span>
-                    <span className="font-medium">{response.best_model_name}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">
-                      {response.evaluation_metrics_all_models[
-                        response.best_model_name
-                      ].accuracy !== undefined
-                        ? "Accuracy"
-                        : "Mean Squared Error"}
-                    </span>
-                    <span className="font-medium">
-                      {response.best_model_score.toFixed(4)}
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="mt-4 space-y-4">
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <h3 className="text-sm font-semibold">Best Model: {response.best_model_name}</h3>
+                <p className="text-xs text-gray-600">Score: {response.best_model_score.toFixed(4)}</p>
+              </div>
 
-            {/* Evaluation Metrics for All Models */}
-            <Card className="mt-4">
-              <CardContent className="pt-6">
-                <h3 className="text-lg font-semibold mb-4">
-                  Evaluation Metrics for All Models
-                </h3>
-                <div className="space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold mb-2">Evaluation Metrics</h3>
+                <div className="space-y-2">
                   {Object.entries(response.evaluation_metrics_all_models).map(
-                    ([modelName, metrics]) => (
-                      <div key={modelName} className="border rounded-lg p-4">
-                        <h4 className="text-md font-medium mb-2">{modelName}</h4>
-                        <div className="space-y-2">
-                          {metrics.accuracy !== undefined ? (
-                            <>
-                              <div className="flex justify-between text-sm">
-                                <span className="text-gray-600">Accuracy</span>
-                                <span className="font-medium">
-                                  {metrics.accuracy?.toFixed(4) || "N/A"}
-                                </span>
-                              </div>
-                              <div className="flex justify-between text-sm">
-                                <span className="text-gray-600">F1 Score</span>
-                                <span className="font-medium">
-                                  {metrics.f1_score?.toFixed(4) || "N/A"}
-                                </span>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="flex justify-between text-sm">
-                                <span className="text-gray-600">
-                                  Mean Squared Error
-                                </span>
-                                <span className="font-medium">
-                                  {metrics.mean_squared_error?.toFixed(4) || "N/A"}
-                                </span>
-                              </div>
-                              <div className="flex justify-between text-sm">
-                                <span className="text-gray-600">R² Score</span>
-                                <span className="font-medium">
-                                  {metrics.r2_score?.toFixed(4) || "N/A"}
-                                </span>
-                              </div>
-                            </>
-                          )}
+                    ([modelName, metrics]: [string, any]) => (
+                      <div key={modelName} className="bg-gray-50 p-2 rounded-lg">
+                        <h4 className="text-xs font-medium mb-1">{modelName}</h4>
+                        <div className="grid grid-cols-2 gap-1 text-xs">
+                          {Object.entries(metrics).map(([metricName, value]: [string, number]) => (
+                            <div key={metricName} className="flex justify-between">
+                              <span className="text-gray-600">{metricName}</span>
+                              <span className="font-medium">{value.toFixed(4)}</span>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                    )
+                    ),
                   )}
                 </div>
-              </CardContent>
-            </Card>
+              </div>
 
-            {/* Download Best Model Button */}
-            <div className="flex justify-end mt-4">
-              <a
-                href={`http://127.0.0.1:8000${response.best_model_download_link}`}
-                download
-                className="no-underline"
-              >
-                <Button className="flex items-center gap-2">
-                  <Download className="w-4 h-4" />
-                  Download Best Model
-                </Button>
-              </a>
+              <div className="flex justify-end">
+                <a
+                  href={`http://127.0.0.1:8000${response.best_model_download_link}`}
+                  download
+                  className="no-underline"
+                >
+                  <Button size="sm" className="flex items-center gap-1">
+                    <Download className="w-3 h-3" />
+                    Download Best Model
+                  </Button>
+                </a>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
       )}
     </div>
+  </div>
   );
 }
