@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 import pandas as pd
 import os
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import joblib
 import uvicorn
 from sklearn.compose import ColumnTransformer
@@ -19,10 +19,12 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from io import BytesIO
 import base64
-import traceback  # For detailed error logging
+import traceback
 
+# Set up logging
 logging.basicConfig(level=logging.DEBUG)
 
+# Initialize FastAPI app
 app = FastAPI()
 
 # Enable CORS
@@ -35,14 +37,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Define directories
 TEMP_DIR = "temp"
 MODEL_DIR = "models"
 os.makedirs(TEMP_DIR, exist_ok=True)
 os.makedirs(MODEL_DIR, exist_ok=True)
 
-def determine_scaler(df: pd.DataFrame, numeric_cols: list) -> str:
+# Helper Functions
+def determine_scaler(df: pd.DataFrame, numeric_cols: pd.Index) -> str:
     """Determine the most suitable scaler based on numeric column distributions."""
-    if numeric_cols.empty:  # Fixed: Use .empty instead of direct boolean check
+    if numeric_cols.empty:
         return "minmax"
     skewness = df[numeric_cols].skew().abs().mean()
     return "standard" if skewness < 1 else "minmax"
@@ -65,23 +69,23 @@ def determine_missing_strategy(df: pd.DataFrame, col: str) -> str:
 def determine_encoding_strategy(df: pd.DataFrame, col: str) -> str:
     """Determine the best encoding strategy for a categorical column."""
     cardinality = df[col].nunique()
-    if cardinality == 0:  # Handle case where column has no unique values
+    if cardinality == 0:
         return "drop"
     if cardinality / len(df[col]) > 0.1 or cardinality > 50:
         return "onehot"
     return "ordinal"
 
-def convert_numpy_types(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Convert NumPy types to native Python types for JSON serialization."""
-    converted_data = {}
-    for key, value in data.items():
-        if isinstance(value, dict):
-            converted_data[key] = convert_numpy_types(value)
-        elif isinstance(value, (np.integer, np.floating)):
-            converted_data[key] = value.item()
-        else:
-            converted_data[key] = value
-    return converted_data
+def convert_numpy_types(data: Any) -> Any:
+    """Recursively convert NumPy types to native Python types for JSON serialization."""
+    if isinstance(data, dict):
+        return {key: convert_numpy_types(value) for key, value in data.items()}
+    elif isinstance(data, list):
+        return [convert_numpy_types(item) for item in data]
+    elif isinstance(data, (np.integer, np.floating)):
+        return data.item()
+    elif isinstance(data, np.ndarray):
+        return data.tolist()
+    return data
 
 def generate_visualizations(df: pd.DataFrame) -> Dict[str, str]:
     """Generate visualizations and return them as base64-encoded images."""
@@ -89,24 +93,26 @@ def generate_visualizations(df: pd.DataFrame) -> Dict[str, str]:
     numeric_cols = df.select_dtypes(include=["float64", "int64"]).columns
     categorical_cols = df.select_dtypes(exclude=["float64", "int64", "datetime64"]).columns
 
-    for col in numeric_cols[:3]:
-        plt.figure(figsize=(6, 4))
-        sns.histplot(df[col], kde=True)
-        plt.title(f"Distribution of {col}")
-        buf = BytesIO()
-        plt.savefig(buf, format="png")
-        plt.close()
-        visualizations[f"histogram_{col}"] = base64.b64encode(buf.getvalue()).decode("utf-8")
+    if not numeric_cols.empty:
+        for col in numeric_cols[:3]:
+            plt.figure(figsize=(6, 4))
+            sns.histplot(df[col], kde=True)
+            plt.title(f"Distribution of {col}")
+            buf = BytesIO()
+            plt.savefig(buf, format="png")
+            plt.close()
+            visualizations[f"histogram_{col}"] = base64.b64encode(buf.getvalue()).decode("utf-8")
 
-    for col in categorical_cols[:3]:
-        plt.figure(figsize=(6, 4))
-        sns.countplot(x=col, data=df)
-        plt.title(f"Count of {col}")
-        plt.xticks(rotation=45)
-        buf = BytesIO()
-        plt.savefig(buf, format="png")
-        plt.close()
-        visualizations[f"bar_{col}"] = base64.b64encode(buf.getvalue()).decode("utf-8")
+    if not categorical_cols.empty:
+        for col in categorical_cols[:3]:
+            plt.figure(figsize=(6, 4))
+            sns.countplot(x=col, data=df)
+            plt.title(f"Count of {col}")
+            plt.xticks(rotation=45)
+            buf = BytesIO()
+            plt.savefig(buf, format="png")
+            plt.close()
+            visualizations[f"bar_{col}"] = base64.b64encode(buf.getvalue()).decode("utf-8")
 
     if len(numeric_cols) > 1:
         plt.figure(figsize=(8, 6))
@@ -119,10 +125,12 @@ def generate_visualizations(df: pd.DataFrame) -> Dict[str, str]:
 
     return visualizations
 
+# API Endpoints
 @app.post("/process-csv/")
 async def process_data(file: UploadFile = File(...), include_visualizations: bool = Form(default=False)) -> Dict[str, Any]:
+    """Process an uploaded dataset and return a downloadable processed CSV."""
     try:
-        # Load file based on type, parsing dates if a Date column exists
+        # Load file based on type
         if file.filename.endswith(".csv"):
             df = pd.read_csv(file.file)
         elif file.filename.endswith((".xls", ".xlsx")):
@@ -136,12 +144,12 @@ async def process_data(file: UploadFile = File(...), include_visualizations: boo
         if "Date" in df.columns:
             df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
 
-        # Detect datetime columns
+        # Identify column types
         datetime_cols = df.select_dtypes(include=["datetime64"]).columns
         numeric_cols = df.select_dtypes(include=["float64", "int64"]).columns.difference(datetime_cols)
         categorical_cols = df.select_dtypes(exclude=["float64", "int64", "datetime64"]).columns
 
-        # Handle missing values dynamically
+        # Handle missing values
         fill_values = {}
         columns_to_drop = []
         for col in df.columns:
@@ -168,7 +176,7 @@ async def process_data(file: UploadFile = File(...), include_visualizations: boo
         numeric_cols = df.select_dtypes(include=["float64", "int64"]).columns.difference(datetime_cols)
         categorical_cols = df.select_dtypes(exclude=["float64", "int64", "datetime64"]).columns
 
-        # Text normalization and encoding only for non-datetime categorical columns
+        # Encode categorical columns
         for col in list(categorical_cols):
             if col in datetime_cols:
                 continue
@@ -180,16 +188,16 @@ async def process_data(file: UploadFile = File(...), include_visualizations: boo
             elif encoding == "onehot":
                 encoder = OneHotEncoder(sparse_output=False, handle_unknown="ignore")
                 encoded_data = encoder.fit_transform(df[[col]])
-                encoded_df = pd.DataFrame(encoded_data, columns=encoder.get_feature_names_out([col]))
+                encoded_df = pd.DataFrame(encoded_data, columns=encoder.get_feature_names_out([col]), index=df.index)
                 df = pd.concat([df.drop(columns=[col]), encoded_df], axis=1)
             else:
                 encoder = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)
                 df[col] = encoder.fit_transform(df[[col]])
 
-        # Dynamic scaling for numeric columns only
+        # Scale numeric columns
         scaler_type = determine_scaler(df, numeric_cols)
         scaler = StandardScaler() if scaler_type == "standard" else MinMaxScaler()
-        if not numeric_cols.empty:  # Fixed: Use .empty instead of direct boolean check
+        if not numeric_cols.empty:
             df[numeric_cols] = scaler.fit_transform(df[numeric_cols])
             logging.debug(f"Applied {scaler_type} scaling to numeric columns: {numeric_cols}")
 
@@ -197,28 +205,28 @@ async def process_data(file: UploadFile = File(...), include_visualizations: boo
         output_path = os.path.join(TEMP_DIR, f"processed_{file.filename}")
         df.to_csv(output_path, index=False)
 
-        # Summary statistics
-        summary_stats = {col: df[col].describe().to_dict() for col in numeric_cols}
-        summary_stats.update({
-            col: {
+        # Generate summary statistics
+        summary_stats = {}
+        for col in numeric_cols:
+            summary_stats[col] = convert_numpy_types(df[col].describe().to_dict())
+        for col in categorical_cols:
+            summary_stats[col] = {
                 "unique_values": df[col].nunique(),
                 "most_frequent": df[col].mode()[0] if not df[col].mode().empty else "Unknown",
                 "missing_values": int(df[col].isnull().sum())
-            } for col in categorical_cols
-        })
-        if len(datetime_cols) > 0:
-            summary_stats.update({
-                col: {
-                    "min": str(df[col].min()),
-                    "max": str(df[col].max()),
-                    "most_frequent": str(df[col].mode()[0]) if not df[col].mode().empty else "Unknown",
-                    "missing_values": int(df[col].isnull().sum())
-                } for col in datetime_cols
-            })
+            }
+        for col in datetime_cols:
+            summary_stats[col] = {
+                "min": str(df[col].min()),
+                "max": str(df[col].max()),
+                "most_frequent": str(df[col].mode()[0]) if not df[col].mode().empty else "Unknown",
+                "missing_values": int(df[col].isnull().sum())
+            }
 
+        # Prepare response
         response = {
             "message": f"Data processed with {scaler_type.capitalize()}Scaler and dynamic encoding",
-            "summary_statistics": convert_numpy_types(summary_stats),
+            "summary_statistics": summary_stats,
             "download_link": f"/download/{os.path.basename(output_path)}"
         }
         if include_visualizations:
@@ -230,6 +238,7 @@ async def process_data(file: UploadFile = File(...), include_visualizations: boo
 
 @app.get("/download/{file_name}")
 async def download_file(file_name: str):
+    """Download a processed file."""
     file_path = os.path.join(TEMP_DIR, file_name)
     if not os.path.exists(file_path):
         return JSONResponse(status_code=404, content={"error": "File not found"})
@@ -237,38 +246,35 @@ async def download_file(file_name: str):
 
 @app.post("/train-model/")
 async def train_model(file: UploadFile = File(...), target_column: str = Form(...), include_metrics_plots: bool = Form(default=False)):
+    """Train a model on the processed dataset."""
     try:
-        # Read CSV without assumptions about date columns
         df = pd.read_csv(file.file)
-        
-        # Convert date columns if they exist
         if "Date" in df.columns:
             df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-            
         if target_column not in df.columns:
             return JSONResponse(status_code=400, content={"error": f"Target column '{target_column}' not found"})
 
         X, y = df.drop(columns=[target_column]), df[target_column]
         is_classification = y.dtype == "object" or y.nunique() <= 20
 
-        # Get list of column types
+        # Identify column types
         datetime_cols = X.select_dtypes(include=["datetime64"]).columns
         numeric_cols = X.select_dtypes(include=["float64", "int64"]).columns.difference(datetime_cols)
         categorical_cols = X.select_dtypes(exclude=["float64", "int64", "datetime64"]).columns
 
-        # Create transformers list
+        # Create transformers
         transformers = []
-        if not categorical_cols.empty:  # Fixed: Use .empty instead of direct boolean check
+        if not categorical_cols.empty:
             transformers.append(("cat", OneHotEncoder(handle_unknown="ignore"), categorical_cols))
-        if not numeric_cols.empty:  # Fixed: Use .empty instead of direct boolean check
+        if not numeric_cols.empty:
             transformers.append(("num", StandardScaler(), numeric_cols))
 
-        # Handle the case where transformers might be empty
         if not transformers:
             return JSONResponse(status_code=400, content={"error": "No valid features found for preprocessing"})
 
         preprocessor = ColumnTransformer(transformers=transformers)
 
+        # Define models
         models = {
             "random_forest": RandomForestClassifier() if is_classification else RandomForestRegressor(),
             "svm": SVC(probability=True) if is_classification else SVR(),
@@ -287,13 +293,11 @@ async def train_model(file: UploadFile = File(...), target_column: str = Form(..
             score = cv_scores.mean()
 
             if is_classification:
-                # Handle potential errors in f1_score calculation
                 try:
                     f1 = f1_score(y_test, y_pred, average="weighted", zero_division=0)
                 except Exception as e:
                     logging.warning(f"Error calculating f1_score: {str(e)}")
                     f1 = 0
-                    
                 model_scores[model_name] = {
                     "cv_accuracy": round(score, 4),
                     "f1_score": round(f1, 4),
@@ -304,17 +308,17 @@ async def train_model(file: UploadFile = File(...), target_column: str = Form(..
                     "mse": round(mean_squared_error(y_test, y_pred), 4),
                 }
 
-            # Fixed: Comparison for both classification and regression
             if score > best_model_score:
                 best_model_score = score
                 best_model_name = model_name
                 best_model_path = os.path.join(MODEL_DIR, f"{model_name}_model.joblib")
                 joblib.dump(pipeline, best_model_path)
 
+        # Prepare response
         response = {
             "best_model_name": best_model_name,
             "best_model_score": round(best_model_score, 4),
-            "evaluation_metrics_all_models": model_scores,
+            "evaluation_metrics_all_models": convert_numpy_types(model_scores),
             "best_model_download_link": f"/download-model/{os.path.basename(best_model_path)}",
         }
 
@@ -335,6 +339,7 @@ async def train_model(file: UploadFile = File(...), target_column: str = Form(..
 
 @app.get("/download-model/{model_name}")
 async def download_model(model_name: str):
+    """Download a trained model."""
     file_path = os.path.join(MODEL_DIR, model_name)
     if not os.path.exists(file_path):
         return JSONResponse(status_code=404, content={"error": "Model not found"})
@@ -342,19 +347,16 @@ async def download_model(model_name: str):
 
 @app.post("/test-model/")
 async def test_model(model_file: UploadFile = File(...), test_data_file: UploadFile = File(...), target_column: str = Form(...)):
+    """Test a trained model on a test dataset."""
     try:
         model_path = os.path.join(TEMP_DIR, "uploaded_model.joblib")
         with open(model_path, "wb") as f:
             f.write(await model_file.read())
         model = joblib.load(model_path)
 
-        # Read CSV without assumptions about date columns
         test_df = pd.read_csv(test_data_file.file)
-        
-        # Convert date columns if they exist
         if "Date" in test_df.columns:
             test_df["Date"] = pd.to_datetime(test_df["Date"], errors="coerce")
-            
         if target_column not in test_df.columns:
             return JSONResponse(status_code=400, content={"error": f"Target column '{target_column}' not found"})
 
@@ -363,13 +365,11 @@ async def test_model(model_file: UploadFile = File(...), test_data_file: UploadF
 
         is_classification = isinstance(y_test.iloc[0], (str, bool)) or y_test.nunique() <= 20
         if is_classification:
-            # Handle potential errors in f1_score calculation
             try:
                 f1 = f1_score(y_test, y_pred, average="weighted", zero_division=0)
             except Exception as e:
                 logging.warning(f"Error calculating f1_score: {str(e)}")
                 f1 = 0
-                
             result = {
                 "accuracy": round(accuracy_score(y_test, y_pred), 4),
                 "f1_score": round(f1, 4),
@@ -381,7 +381,7 @@ async def test_model(model_file: UploadFile = File(...), test_data_file: UploadF
                 "r2_score": round(r2_score(y_test, y_pred), 4),
                 "predictions": y_pred.tolist(),
             }
-        return result
+        return convert_numpy_types(result)
     except Exception as e:
         logging.error(f"Error testing model: {str(e)}\n{traceback.format_exc()}")
         return JSONResponse(status_code=500, content={"error": str(e)})
