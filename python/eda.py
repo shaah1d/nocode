@@ -1,5 +1,8 @@
+from datetime import datetime
+import json
+import uuid
 import numpy as np
-from fastapi import FastAPI, File, UploadFile, Form
+from fastapi import FastAPI, File, Request, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 import pandas as pd
@@ -159,21 +162,42 @@ def remove_highly_correlated_features(df: pd.DataFrame, threshold: float = 0.95)
     return df
 
 # API Endpoint
-@app.post("/process-csv/")
+@app.post("/process-csv/",
+          summary="Process uploaded dataset",
+          response_description="Processed data summary and download link")
 async def process_data(
+    request: Request,
     file: UploadFile = File(...),
     include_visualizations: bool = Form(default=False),
     target_column: str = Form(default=None)
 ) -> Dict[str, Any]:
     """
     Process an uploaded dataset and return a downloadable processed CSV.
-    If a target column is provided, it is separated, processed (encoded if necessary) and then reattached.
-    SMOTE is applied on the training data if the target is binary and imbalanced.
+    
+    - **file**: CSV, Excel, or JSON file containing the dataset
+    - **include_visualizations**: Whether to generate and return data visualizations
+    - **target_column**: Name of the target variable column
+    
+    Returns processed data with automatic feature engineering applied.
     """
     try:
+        # Validate file size before processing
+        file_size = 0
+        file.file.seek(0, 2)
+        file_size = file.file.tell()
+        file.file.seek(0)
+        
+        if file_size > 100 * 1024 * 1024:  # 100MB limit
+            return JSONResponse(status_code=413, content={"error": "File too large (>100MB)"})
+            
         # Load file based on type
         if file.filename.endswith(".csv"):
-            df = pd.read_csv(file.file)
+            if file_size > 10 * 1024 * 1024:  # 10MB
+                chunk_size = 10000  # rows
+                chunks = pd.read_csv(file.file, chunksize=chunk_size)
+                df = pd.concat([chunk for chunk in chunks])
+            else:
+                df = pd.read_csv(file.file)
         elif file.filename.endswith((".xls", ".xlsx")):
             df = pd.read_excel(file.file)
         elif file.filename.endswith(".json"):
@@ -259,6 +283,15 @@ async def process_data(
         # Update feature column lists after removal
         numeric_cols = df.select_dtypes(include=["number"]).columns
         categorical_cols = df.select_dtypes(exclude=["number"]).columns
+        scaler_type = determine_scaler(df, numeric_cols)
+
+        preprocessing_metadata = {
+            "missing_value_strategy": {col: determine_missing_strategy(df, col) for col in df.columns},
+            "encoding_strategy": {col: determine_encoding_strategy(df, col) for col in categorical_cols},
+            "scaler_type": scaler_type,
+            "removed_columns": columns_to_drop,
+            "timestamp": datetime.now().isoformat()
+        }
 
         # Encode categorical features
         for col in list(categorical_cols):
@@ -281,7 +314,7 @@ async def process_data(
         numeric_cols = df.select_dtypes(include=["number"]).columns
 
         # Scale numeric features
-        scaler_type = determine_scaler(df, numeric_cols)
+        
         scaler = StandardScaler() if scaler_type == "standard" else MinMaxScaler()
         if not numeric_cols.empty:
             df[numeric_cols] = scaler.fit_transform(df[numeric_cols])
@@ -313,10 +346,19 @@ async def process_data(
         output_path = os.path.join(TEMP_DIR, f"processed_{file.filename}")
         df.to_csv(output_path, index=False)
 
+        # Record preprocessing steps for metadata
+        
+        
+        # Save preprocessing metadata
+        metadata_path = os.path.join(TEMP_DIR, f"metadata_{file.filename}.json")
+        with open(metadata_path, 'w') as f:
+            json.dump(convert_numpy_types(preprocessing_metadata), f)
+
         # Prepare response
         response = {
             "message": f"Data processed with {scaler_type.capitalize()} scaling and dynamic encoding.",
             "summary_statistics": summary_stats,
+            "preprocessing_metadata": preprocessing_metadata,
             "download_link": f"/download/{os.path.basename(output_path)}"
         }
         if include_visualizations:
@@ -334,14 +376,28 @@ async def download_file(file_name: str):
         return JSONResponse(status_code=404, content={"error": "File not found"})
     return FileResponse(file_path, media_type="text/csv", filename=file_name)
 
-@app.post("/train-model/")
+@app.post("/train-model/",
+          summary="Train ML model on processed dataset",
+          response_description="Model metrics and download link")
 async def train_model(
+    request: Request,
     file: UploadFile = File(...),
     target_column: str = Form(...),
     include_metrics_plots: bool = Form(default=False)
 ):
-    """Train a model on the processed dataset."""
+    """
+    Train a model on the processed dataset.
+    
+    - **file**: Processed CSV file
+    - **target_column**: Name of the target variable column
+    - **include_metrics_plots**: Whether to generate and return model evaluation plots
+    
+    Returns model evaluation metrics and a link to download the trained model.
+    """
     try:
+        request_id = getattr(request.state, 'request_id', str(uuid.uuid4()))
+        logging.info(f"Request {request_id}: Starting model training")
+        
         df = pd.read_csv(file.file)
         if "Date" in df.columns:
             df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
@@ -359,8 +415,8 @@ async def train_model(
         elif pd.api.types.is_float_dtype(y):
             is_classification = False
 
-        logging.info(f"Target column '{target_column}' classified as: {'Classification' if is_classification else 'Regression'}")
-        logging.info(f"Target data type: {y.dtype}, Number of unique values: {y.nunique()}")
+        logging.info(f"Request {request_id}: Target column '{target_column}' classified as: {'Classification' if is_classification else 'Regression'}")
+        logging.info(f"Request {request_id}: Target data type: {y.dtype}, Number of unique values: {y.nunique()}")
 
         # Identify column types in features
         datetime_cols = X.select_dtypes(include=["datetime64"]).columns
@@ -422,10 +478,12 @@ async def train_model(
 
         # Loop through models and tune hyperparameters using GridSearchCV
         for model_name, (model, param_grid) in models.items():
+            # Split data before applying pipeline to prevent data leakage
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+            
             pipeline = Pipeline([("preprocessor", preprocessor), ("model", model)])
             grid_search = GridSearchCV(pipeline, param_grid=param_grid, cv=cv_strategy, scoring=scoring_metric)
             
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
             try:
                 grid_search.fit(X_train, y_train)
                 best_estimator = grid_search.best_estimator_
@@ -459,6 +517,24 @@ async def train_model(
                     best_model_path = os.path.join(MODEL_DIR, f"{model_name}_model.joblib")
                     joblib.dump(best_pipeline, best_model_path)
 
+                # Add feature importance if available
+                if hasattr(best_estimator[-1], 'feature_importances_'):
+                    try:
+                        feature_importances = best_estimator[-1].feature_importances_
+                        feature_names = X.columns.tolist()
+                        # Try to get transformed feature names if available
+                        if hasattr(best_estimator[0], 'get_feature_names_out'):
+                            try:
+                                feature_names = best_estimator[0].get_feature_names_out()
+                            except Exception as e:
+                                logging.warning(f"Could not get feature names: {str(e)}")
+                        
+                        importances = dict(zip(feature_names, feature_importances))
+                        sorted_importances = dict(sorted(importances.items(), key=lambda x: x[1], reverse=True))
+                        model_scores[model_name]["feature_importances"] = sorted_importances
+                    except Exception as e:
+                        logging.warning(f"Could not calculate feature importances: {str(e)}")
+
             except Exception as e:
                 logging.error(f"Error fitting {model_name}: {str(e)}")
                 model_scores[model_name] = {"error": str(e)}
@@ -466,13 +542,30 @@ async def train_model(
 
         if best_model_name is None:
             return JSONResponse(status_code=500, content={"error": "All models failed to train"})
+        
+        # Create model metadata
+        model_metadata = {
+            "creation_date": datetime.now().isoformat(),
+            "feature_columns": X.columns.tolist(),
+            "target_column": target_column,
+            "problem_type": "classification" if is_classification else "regression",
+            "metrics": model_scores[best_model_name],
+            "preprocessing_steps": str(transformers),
+            "best_params": grid_search.best_params_
+        }
+        
+        # Save metadata alongside model
+        model_metadata_path = os.path.join(MODEL_DIR, f"{best_model_name}_metadata.json")
+        with open(model_metadata_path, 'w') as f:
+            json.dump(convert_numpy_types(model_metadata), f)
 
         response = {
             "best_model_name": best_model_name,
             "best_model_score": round(best_model_score, 4),
             "problem_type": "classification" if is_classification else "regression",
             "evaluation_metrics_all_models": convert_numpy_types(model_scores),
-            "best_model_download_link": f"/download-model/{os.path.basename(best_model_path)}"
+            "best_model_download_link": f"/download-model/{os.path.basename(best_model_path)}",
+            "model_metadata_link": f"/model-metadata/{os.path.basename(model_metadata_path)}"
         }
 
         # Include additional metric plots
